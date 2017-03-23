@@ -9,6 +9,7 @@
 package diffmatchpatch
 
 import (
+	"bytes"
 	"strings"
 	"unicode/utf8"
 )
@@ -47,6 +48,21 @@ func lastIndexOf(str string, pattern string, i int) int {
 	}
 	_, size := utf8.DecodeRuneInString(str[i:])
 	return strings.LastIndex(str[:i+size], pattern)
+}
+
+// bytesIndexOf returns the index of pattern in target, starting at target[i].
+func bytesIndexOf(target, pattern []byte, i int) int {
+	if i > len(target)-1 {
+		return -1
+	}
+	if i <= 0 {
+		return bytes.Index(target, pattern)
+	}
+	ind := bytes.Index(target[i:], pattern)
+	if ind == -1 {
+		return -1
+	}
+	return ind + i
 }
 
 // runesIndexOf returns the index of pattern in target, starting at target[i].
