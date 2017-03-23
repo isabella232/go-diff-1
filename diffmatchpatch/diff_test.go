@@ -15,7 +15,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -103,7 +102,7 @@ func TestCommonPrefixLength(t *testing.T) {
 		{"1234abcdef", "1234xyz", 4},
 		{"1234", "1234xyz", 4},
 	} {
-		actual := commonPrefixLength([]rune(tc.Text1), []rune(tc.Text2))
+		actual := commonPrefixLength([]byte(tc.Text1), []byte(tc.Text2))
 		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
 	}
 }
@@ -156,7 +155,7 @@ func TestCommonSuffixLength(t *testing.T) {
 		{"1234", "xyz1234", 4},
 		{"123", "a3", 1},
 	} {
-		actual := commonSuffixLength([]rune(tc.Text1), []rune(tc.Text2))
+		actual := commonSuffixLength([]byte(tc.Text1), []byte(tc.Text2))
 		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
 	}
 }
@@ -254,12 +253,8 @@ func TestDiffBisectSplit(t *testing.T) {
 	for _, tc := range []TestCase{
 		{"STUV\x05WX\x05YZ\x05[", "WĺĻļ\x05YZ\x05ĽľĿŀZ"},
 	} {
-		diffs := dmp.diffBisectSplit([]rune(tc.Text1),
-			[]rune(tc.Text2), 7, 6, time.Now().Add(time.Hour))
-
-		for _, d := range diffs {
-			assert.True(t, utf8.ValidString(d.Text))
-		}
+		dmp.diffBisectSplit([]byte(tc.Text1),
+			[]byte(tc.Text2), 7, 6, time.Now().Add(time.Hour))
 
 		// TODO define the expected outcome
 	}
@@ -294,63 +289,19 @@ func TestDiffLinesToChars(t *testing.T) {
 	lineList := []string{
 		"", // Account for the initial empty element of the lines array.
 	}
-	var charList []rune
+	var charList []byte
 	for x := 1; x < n+1; x++ {
 		lineList = append(lineList, strconv.Itoa(x)+"\n")
-		charList = append(charList, rune(x))
+		charList = append(charList, byte(x))
 	}
 	lines := strings.Join(lineList, "")
 	chars := string(charList)
-	assert.Equal(t, n, utf8.RuneCountInString(chars))
+	assert.Equal(t, n, len(chars))
 
 	actualChars1, actualChars2, actualLines := dmp.DiffLinesToChars(lines, "")
 	assert.Equal(t, chars, actualChars1)
 	assert.Equal(t, "", actualChars2)
 	assert.Equal(t, lineList, actualLines)
-}
-
-func TestDiffCharsToLines(t *testing.T) {
-	type TestCase struct {
-		Diffs []Diff
-		Lines []string
-
-		Expected []Diff
-	}
-
-	dmp := New()
-
-	for i, tc := range []TestCase{
-		{
-			Diffs: []Diff{
-				{DiffEqual, "\u0001\u0002\u0001"},
-				{DiffInsert, "\u0002\u0001\u0002"},
-			},
-			Lines: []string{"", "alpha\n", "beta\n"},
-
-			Expected: []Diff{
-				{DiffEqual, "alpha\nbeta\nalpha\n"},
-				{DiffInsert, "beta\nalpha\nbeta\n"},
-			},
-		},
-	} {
-		actual := dmp.DiffCharsToLines(tc.Diffs, tc.Lines)
-		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
-	}
-
-	// More than 256 to reveal any 8-bit limitations.
-	n := 300
-	lineList := []string{
-		"", // Account for the initial empty element of the lines array.
-	}
-	charList := []rune{}
-	for x := 1; x <= n; x++ {
-		lineList = append(lineList, strconv.Itoa(x)+"\n")
-		charList = append(charList, rune(x))
-	}
-	assert.Equal(t, n, len(charList))
-
-	actual := dmp.DiffCharsToLines([]Diff{Diff{DiffDelete, string(charList)}}, lineList)
-	assert.Equal(t, []Diff{Diff{DiffDelete, strings.Join(lineList, "")}}, actual)
 }
 
 func TestDiffCleanupMerge(t *testing.T) {
@@ -556,7 +507,7 @@ func TestDiffCleanupSemanticLossless(t *testing.T) {
 			},
 		},
 		{
-			"Rune boundaries",
+			"Byte boundaries",
 			[]Diff{
 				Diff{DiffEqual, "♕♕"},
 				Diff{DiffInsert, "♔♔"},
@@ -798,7 +749,7 @@ func BenchmarkDiffCleanupSemantic(b *testing.B) {
 
 	dmp := New()
 
-	diffs := dmp.DiffMain(s1, s2, false)
+	diffs := dmp.DiffMain(s1, s2)
 
 	b.ResetTimer()
 
@@ -1056,7 +1007,6 @@ func TestDiffDelta(t *testing.T) {
 
 	// Lowercase, due to UrlEncode uses lower.
 	delta = dmp.DiffToDelta(diffs)
-	assert.Equal(t, "=7\t-7\t+%DA%82 %02 %5C %7C", delta)
 
 	deltaDiffs, err = dmp.DiffFromDelta(text1, delta)
 	assert.Equal(t, diffs, deltaDiffs)
@@ -1193,7 +1143,7 @@ func TestDiffBisect(t *testing.T) {
 
 	// Test for invalid UTF-8 sequences
 	assert.Equal(t, []Diff{
-		Diff{DiffEqual, "��"},
+		Diff{DiffEqual, "\xe0\xe5"},
 	}, dmp.DiffBisect("\xe0\xe5", "\xe0\xe5", time.Now().Add(time.Minute)))
 }
 
@@ -1240,7 +1190,7 @@ func TestDiffMain(t *testing.T) {
 			[]Diff{Diff{DiffEqual, "a"}, Diff{DiffDelete, "123"}, Diff{DiffEqual, "b"}, Diff{DiffDelete, "456"}, Diff{DiffEqual, "c"}},
 		},
 	} {
-		actual := dmp.DiffMain(tc.Text1, tc.Text2, false)
+		actual := dmp.DiffMain(tc.Text1, tc.Text2)
 		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
 	}
 
@@ -1322,14 +1272,14 @@ func TestDiffMain(t *testing.T) {
 			},
 		},
 	} {
-		actual := dmp.DiffMain(tc.Text1, tc.Text2, false)
+		actual := dmp.DiffMain(tc.Text1, tc.Text2)
 		assert.Equal(t, tc.Expected, actual, fmt.Sprintf("Test case #%d, %#v", i, tc))
 	}
 
 	// Test for invalid UTF-8 sequences
 	assert.Equal(t, []Diff{
-		Diff{DiffDelete, "��"},
-	}, dmp.DiffMain("\xe0\xe5", "", false))
+		Diff{DiffDelete, "\xe0\xe5"},
+	}, dmp.DiffMain("\xe0\xe5", ""))
 }
 
 func TestDiffMainWithTimeout(t *testing.T) {
@@ -1345,7 +1295,7 @@ func TestDiffMainWithTimeout(t *testing.T) {
 	}
 
 	startTime := time.Now()
-	dmp.DiffMain(a, b, true)
+	dmp.DiffMain(a, b)
 	endTime := time.Now()
 
 	delta := endTime.Sub(startTime)
@@ -1381,8 +1331,8 @@ func TestDiffMainWithCheckLines(t *testing.T) {
 			"abcdefghij\n1234567890\n1234567890\n1234567890\nabcdefghij\n1234567890\n1234567890\n1234567890\nabcdefghij\n1234567890\n1234567890\n1234567890\nabcdefghij\n",
 		},
 	} {
-		resultWithoutCheckLines := dmp.DiffMain(tc.Text1, tc.Text2, false)
-		resultWithCheckLines := dmp.DiffMain(tc.Text1, tc.Text2, true)
+		resultWithoutCheckLines := dmp.DiffMain(tc.Text1, tc.Text2)
+		resultWithCheckLines := dmp.DiffMain(tc.Text1, tc.Text2)
 
 		// TODO this fails for the third test case, why?
 		if i != 2 {
@@ -1408,7 +1358,7 @@ func BenchmarkDiffMain(bench *testing.B) {
 	bench.ResetTimer()
 
 	for i := 0; i < bench.N; i++ {
-		dmp.DiffMain(s1, s2, true)
+		dmp.DiffMain(s1, s2)
 	}
 }
 
@@ -1420,21 +1370,6 @@ func BenchmarkDiffMainLarge(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		dmp.DiffMain(s1, s2, true)
-	}
-}
-
-func BenchmarkDiffMainRunesLargeLines(b *testing.B) {
-	s1, s2 := speedtestTexts()
-
-	dmp := New()
-
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		text1, text2, linearray := dmp.DiffLinesToRunes(s1, s2)
-
-		diffs := dmp.DiffMainRunes(text1, text2, false)
-		diffs = dmp.DiffCharsToLines(diffs, linearray)
+		dmp.DiffMain(s1, s2)
 	}
 }

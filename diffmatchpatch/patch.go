@@ -121,7 +121,7 @@ func (dmp *DiffMatchPatch) PatchMake(opt ...interface{}) []Patch {
 		text1 := opt[0].(string)
 		switch t := opt[1].(type) {
 		case string:
-			diffs := dmp.DiffMain(text1, t, true)
+			diffs := dmp.DiffMain(text1, t)
 			if len(diffs) > 2 {
 				diffs = dmp.DiffCleanupSemantic(diffs)
 				diffs = dmp.DiffCleanupEfficiency(diffs)
@@ -284,7 +284,7 @@ func (dmp *DiffMatchPatch) PatchApply(patches []Patch, text string) (string, []b
 				text = text[:startLoc] + dmp.DiffText2(aPatch.diffs) + text[startLoc+len(text1):]
 			} else {
 				// Imperfect match.  Run a diff to get a framework of equivalent indices.
-				diffs := dmp.DiffMain(text1, text2, false)
+				diffs := dmp.DiffMain(text1, text2)
 				if len(text1) > dmp.MatchMaxBits && float64(dmp.DiffLevenshtein(diffs))/float64(len(text1)) > dmp.PatchDeleteThreshold {
 					// The end points match, but the content is unacceptably bad.
 					results[x] = false
